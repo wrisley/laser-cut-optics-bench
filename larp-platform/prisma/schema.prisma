@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  player
+  organizer
+  referee
+  admin
+}
+
+enum RegistrationStatus {
+  pending
+  confirmed
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  reconciled
+  failed
+}
+
+model Tenant {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  campaigns   Campaign[]
+  events      Event[]
+  ticketTiers TicketTier[]
+  registrations Registration[]
+  incidents   Incident[]
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  passwordHash  String
+  createdAt     DateTime     @default(now())
+  memberships   Membership[]
+  registrations Registration[]
+  checkins      CheckIn[]
+  incidents     Incident[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      Role
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+}
+
+model Campaign {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model Event {
+  id         String       @id @default(cuid())
+  tenantId   String
+  campaignId String?
+  name       String
+  capacity   Int
+  startsAt   DateTime
+  createdAt  DateTime     @default(now())
+  tenant     Tenant       @relation(fields: [tenantId], references: [id])
+  campaign   Campaign?    @relation(fields: [campaignId], references: [id])
+  ticketTiers TicketTier[]
+  registrations Registration[]
+  checkins   CheckIn[]
+  incidents  Incident[]
+}
+
+model TicketTier {
+  id          String   @id @default(cuid())
+  tenantId    String
+  eventId     String
+  name        String
+  priceCents  Int
+  currency    String   @default("usd")
+  isPaid      Boolean
+  capacity    Int
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  event       Event    @relation(fields: [eventId], references: [id])
+  registrations Registration[]
+}
+
+model Registration {
+  id           String             @id @default(cuid())
+  tenantId     String
+  eventId      String
+  userId       String
+  ticketTierId String
+  status       RegistrationStatus @default(pending)
+  createdAt    DateTime           @default(now())
+  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  event        Event              @relation(fields: [eventId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  ticketTier   TicketTier         @relation(fields: [ticketTierId], references: [id])
+  payments     Payment[]
+  checkins     CheckIn[]
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  registrationId  String
+  stripeEventId   String        @unique
+  stripeSessionId String?
+  amountCents     Int
+  status          PaymentStatus
+  createdAt       DateTime      @default(now())
+  registration    Registration  @relation(fields: [registrationId], references: [id])
+}
+
+model CheckIn {
+  id             String       @id @default(cuid())
+  tenantId       String
+  eventId        String
+  registrationId String
+  checkedInById  String
+  createdAt      DateTime     @default(now())
+  event          Event        @relation(fields: [eventId], references: [id])
+  registration   Registration @relation(fields: [registrationId], references: [id])
+  checkedInBy    User         @relation(fields: [checkedInById], references: [id])
+}
+
+model Incident {
+  id          String   @id @default(cuid())
+  tenantId    String
+  eventId     String
+  reportedById String
+  summary     String
+  visibility  String   @default("staff")
+  createdAt   DateTime @default(now())
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  event       Event    @relation(fields: [eventId], references: [id])
+  reportedBy  User     @relation(fields: [reportedById], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  actorId   String
+  action    String
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+}
